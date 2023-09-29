@@ -1,0 +1,190 @@
+<!DOCTYPE html>
+<html>
+    <head>
+        <title>Titulación Poliprótica</title>
+    </head>
+    <body>
+        <section style="display: flex; flex-direction: column; width: 200px;">
+            
+            <span>Volumen Inicial:</span>
+            <input id="volumen-inicial" type="number" value="100">
+
+            <span>Volumen Total Agregado:</span>
+            <input id="volumen-total" type="number" value="200">
+            <span>Volumen anadido (ml)</span>
+            <input id="volumen-anadido" type="number" value="1">
+            <span>Ka1</span>
+            <input id="ka1" type="number" value="1E-4">
+            <span>Ka2</span>
+            <input id="ka2" type="number" value="1E-7">
+            
+            <span>Concentracion del Ácido</span>
+            <input id="concentracion-acido" type="number" value="0.1">
+            <span>Concentracion de la Base</span>
+            <input id="concentracion-base" type="number" value="0.1">
+            <br>
+            <button id="boton-graficar">Graficar</button>
+        </section>
+        
+        <svg width="700" height="500" id="lienzo"></svg>
+
+        <script src="./js/d3.v7.min.js" type="text/javascript" defer></script>
+        <script type="module">
+            /**
+             * Return an array with the volume and pH values for the titration
+             * @param {Number} initialVolume Initial volume of aliquot
+             * @param {Number} totalAgregatedVolume Total titulant volume
+             * @param {Number} agregatedStepVolume Volume added on each titration step
+             * @param {Number} ka1 First acid constant
+             * @param {Number} ka2 Second acid constant
+             * @param {Number} acidMolarity Weak acid molarity [mol/L]
+             * @param {Number} baseMolarity Strong base molarity [mol/L]
+             * @returns {Array} Volume and pH values [Vol, pH] x number of points
+             */
+            function getDataDiproticSystem(initialVolume, totalAgregatedVolume, agregatedStepVolume, ka1, ka2, acidMolarity, baseMolarity) {
+                let kb1 = 1e-14/ka2 // first basic constant
+                let nDecimals = 3 // number of decimals for the pH results
+
+                let firstEquivalenceVolume = (initialVolume*acidMolarity)/baseMolarity
+                let secondEquivalenceVolume = 2*firstEquivalenceVolume
+
+                let stepVolume = 0 // volume on step i
+                let stepH = 0 // [H+] on step i
+                let stepOH = 0 // [OH-] on step i
+                let acidConcentration = 0 // acid concentration on step i
+                let baseConcentration = 0 // base concentration on step i
+
+                let pH = [] // pH on step i
+
+                let dataSet = [] // Final array dataset
+
+                let maxPoints = (totalAgregatedVolume*1.5)/agregatedStepVolume // Max number of points
+
+                for (let i = 0; i < parseInt(maxPoints); i++) {
+                    // #################
+                    // # Initial point #
+                    // #################
+                    if (stepVolume === 0) {
+                        stepH = ( -ka1 + Math.sqrt( ka1**2 + 4*acidMolarity*ka1 ) ) / 2 // [H+]
+                        pH = -Math.log10(stepH).toFixed(nDecimals) // pH
+                        dataSet.push([stepVolume, pH])
+                    // #####################
+                    // # first buffer zone #
+                    // #####################
+                    } else if (stepVolume > 0 && stepVolume < firstEquivalenceVolume) {
+                        acidConcentration = ( initialVolume*acidMolarity - stepVolume*baseMolarity )/( initialVolume+stepVolume )
+                        baseConcentration = ( stepVolume*baseMolarity )/( initialVolume+stepVolume )
+                        stepH = ( (-(baseConcentration+ka1))+Math.sqrt((baseConcentration+ka1)**2+4*acidConcentration*ka1 ))/2 // [H+]
+                        pH = -Math.log10(stepH).toFixed(nDecimals) // pH
+                        dataSet.push([stepVolume, pH])
+                    } else if (stepVolume === firstEquivalenceVolume) {
+                        // ###########################
+                        // # first equivalence point #
+                        // ###########################
+                        acidConcentration = ( initialVolume*acidMolarity - stepVolume*baseMolarity )/( initialVolume+stepVolume )
+                        baseConcentration = ( stepVolume*baseMolarity )/( initialVolume+stepVolume )
+                        if (acidConcentration === 0) {
+                            stepH = Math.sqrt( (ka2*baseConcentration+1e-14)/(1+(baseConcentration/ka1)) ) // [H+]
+                            pH = -Math.log10(stepH).toFixed(nDecimals) // pH
+                            dataSet.push([stepVolume, pH])
+                        }
+                    } else if (stepVolume > firstEquivalenceVolume && stepVolume < secondEquivalenceVolume) {
+                        // ######################
+                        // # second buffer zone #
+                        // ######################
+                        acidConcentration = ( firstEquivalenceVolume*acidMolarity - (stepVolume-initialVolume)*baseMolarity )/( initialVolume+stepVolume )
+                        baseConcentration = ( (stepVolume-initialVolume)*baseMolarity )/( initialVolume+stepVolume )
+                        stepH = ( ka2*acidConcentration )/baseConcentration // [H+]
+                        pH = -Math.log10(stepH).toFixed(nDecimals) // pH
+                        dataSet.push([stepVolume, pH])
+                    } else if (stepVolume === secondEquivalenceVolume) {
+                        // ############################
+                        // # second equivalence point #
+                        // ############################
+                        acidConcentration = ( firstEquivalenceVolume*acidMolarity - (stepVolume-initialVolume)*baseMolarity )/( initialVolume+stepVolume )
+                        baseConcentration = ( (stepVolume-initialVolume)*baseMolarity )/( initialVolume+stepVolume )
+                        if (acidConcentration === 0) {
+                            stepOH = Math.sqrt( kb1*baseConcentration ) // [OH-]
+                            stepH = 1E-14/stepOH // [H+]
+                            pH = -Math.log10(stepH).toFixed(nDecimals) // pH
+                            dataSet.push([stepVolume, pH])
+                        }
+                    } else if (stepVolume > secondEquivalenceVolume) {
+                        // ##################################
+                        // # after second equivalence point #
+                        // ##################################
+                        stepOH = ( (stepVolume-secondEquivalenceVolume)*baseMolarity )/( initialVolume+stepVolume ) // [OH-]
+                        stepH = 1E-14/stepOH // [H+]
+                        pH = -Math.log10(stepH).toFixed(nDecimals) // pH
+                        dataSet.push([stepVolume, pH])
+                    } else if (stepVolume > totalAgregatedVolume) {
+                        break
+                    }
+                    stepVolume += agregatedStepVolume // Update step volume value
+                }
+                return dataSet
+            }
+            function graficarTitulacion(){
+
+                d3.selectAll("svg").selectAll("*").remove();
+
+                let initialVolume = parseInt(document.getElementById("volumen-inicial").value);
+                let totalVolume = parseInt(document.getElementById("volumen-total").value);
+                let ka1 = parseFloat(document.getElementById("ka1").value);
+                let ka2 = parseFloat(document.getElementById("ka2").value);
+                let agregatedVolume = parseFloat(document.getElementById("volumen-anadido").value);
+                let acidMolarity = document.getElementById("concentracion-acido").value;
+                let baseMolarity = document.getElementById("concentracion-base").value;
+
+                const data = getDataDiproticSystem(
+                    initialVolume, totalVolume, agregatedVolume, ka1, ka2, acidMolarity, baseMolarity);
+
+                const width = 700;
+                const height = 500;
+                const padding = 20;
+
+                const xScale = d3.scaleLinear()
+                .domain(d3.extent(data, d => d[0]))
+                .range([padding, width - padding]);
+
+                const yScale = d3.scaleLinear()
+                .domain([0, 14])
+                .range([height - padding, padding]);
+
+                const svg = d3.select("svg")
+                .attr("width", width)
+                .attr("height", height);
+
+                svg.selectAll("circle")
+                .data(data)
+                .enter()
+                .append("circle")
+                .attr("cx", (d) => xScale(d[0]))
+                .attr("cy", (d) => yScale(d[1]))
+                .attr("r", (d) => 3)
+                .attr("fill", "blue"); // Cambié "border" a "fill" para establecer el color de relleno
+
+                const xAxis = d3.axisBottom(xScale);
+
+                const yAxis = d3.axisLeft(yScale);
+
+                svg.append("g")
+                .attr("transform", "translate(0," + (height - padding) + ")")
+                .call(xAxis.ticks(10));
+
+                svg.append("g")
+                .attr("transform", "translate(" + padding + ",0)")
+                .call(yAxis.ticks(12));
+            }
+
+            graficarTitulacion()
+            document.getElementById("boton-graficar").addEventListener("click", graficarTitulacion)
+        </script>
+    </body>
+</html>
+
+
+
+
+
+
