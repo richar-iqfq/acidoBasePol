@@ -42,7 +42,8 @@
              * @returns {Array} Volume and pH values [Vol, pH] x number of points
              */
             function getDataDiproticSystem(initialVolume, totalAgregatedVolume, agregatedStepVolume, ka1, ka2, acidMolarity, baseMolarity) {
-                let kb1 = 1e-14/ka2 // first basic constant
+                let kw = 1e-14 // self-ionization water constant
+                let kb1 = kw/ka2 // first basic constant
                 let nDecimals = 3 // number of decimals for the pH results
 
                 let firstEquivalenceVolume = (initialVolume*acidMolarity)/baseMolarity
@@ -61,17 +62,17 @@
                 let maxPoints = (totalAgregatedVolume*1.5)/agregatedStepVolume // Max number of points
 
                 for (let i = 0; i < parseInt(maxPoints); i++) {
-                    // #################
-                    // # Initial point #
-                    // #################
                     if (stepVolume === 0) {
+                        // #################
+                        // # Initial point #
+                        // #################
                         stepH = ( -ka1 + Math.sqrt( ka1**2 + 4*acidMolarity*ka1 ) ) / 2 // [H+]
                         pH = -Math.log10(stepH).toFixed(nDecimals) // pH
                         dataSet.push([stepVolume, pH])
-                    // #####################
-                    // # first buffer zone #
-                    // #####################
                     } else if (stepVolume > 0 && stepVolume < firstEquivalenceVolume) {
+                        // #####################
+                        // # first buffer zone #
+                        // #####################
                         acidConcentration = ( initialVolume*acidMolarity - stepVolume*baseMolarity )/( initialVolume+stepVolume )
                         baseConcentration = ( stepVolume*baseMolarity )/( initialVolume+stepVolume )
                         stepH = ( (-(baseConcentration+ka1))+Math.sqrt((baseConcentration+ka1)**2+4*acidConcentration*ka1 ))/2 // [H+]
@@ -84,7 +85,7 @@
                         acidConcentration = ( initialVolume*acidMolarity - stepVolume*baseMolarity )/( initialVolume+stepVolume )
                         baseConcentration = ( stepVolume*baseMolarity )/( initialVolume+stepVolume )
                         if (acidConcentration === 0) {
-                            stepH = Math.sqrt( (ka2*baseConcentration+1e-14)/(1+(baseConcentration/ka1)) ) // [H+]
+                            stepH = Math.sqrt( (ka2*baseConcentration+kw)/(1+(baseConcentration/ka1)) ) // [H+]
                             pH = -Math.log10(stepH).toFixed(nDecimals) // pH
                             dataSet.push([stepVolume, pH])
                         }
@@ -105,7 +106,7 @@
                         baseConcentration = ( (stepVolume-initialVolume)*baseMolarity )/( initialVolume+stepVolume )
                         if (acidConcentration === 0) {
                             stepOH = Math.sqrt( kb1*baseConcentration ) // [OH-]
-                            stepH = 1E-14/stepOH // [H+]
+                            stepH = kw/stepOH // [H+]
                             pH = -Math.log10(stepH).toFixed(nDecimals) // pH
                             dataSet.push([stepVolume, pH])
                         }
@@ -114,7 +115,7 @@
                         // # after second equivalence point #
                         // ##################################
                         stepOH = ( (stepVolume-secondEquivalenceVolume)*baseMolarity )/( initialVolume+stepVolume ) // [OH-]
-                        stepH = 1E-14/stepOH // [H+]
+                        stepH = kw/stepOH // [H+]
                         pH = -Math.log10(stepH).toFixed(nDecimals) // pH
                         dataSet.push([stepVolume, pH])
                     } else if (stepVolume > totalAgregatedVolume) {
@@ -182,9 +183,3 @@
         </script>
     </body>
 </html>
-
-
-
-
-
-
